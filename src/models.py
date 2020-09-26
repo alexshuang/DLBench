@@ -3,26 +3,17 @@
 
 import torch
 import transformers
-from transformers import AdamW
+from transformers import AdamW, AutoConfig, AutoModelWithLMHead
 from torch.optim import Optimizer
 from apex import amp
 
 
-model_mappings = {
-        'bert': transformers.BertForPreTraining,
-        }
+class ModelLM():
+    def __init__(self, model_name, fp16=False):
+        print(f"Loading {model_name} ...")
+        config = AutoConfig.from_pretrained(model_name)
+        model = AutoModelWithLMHead.from_config(config).cuda()
 
-
-config_mappings = {
-        'bert': transformers.BertConfig,
-        }
-
-
-class ModelMLM():
-    def __init__(self, model_id, fp16=False):
-        mtype = model_id.split('-')[0]
-        config = config_mappings[mtype].from_pretrained(model_id)
-        model = model_mappings[mtype](config).cuda()
         if fp16:
             no_decay = ["bias", "LayerNorm.weight"]
             optim = AdamW([p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)])

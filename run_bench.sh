@@ -2,10 +2,11 @@
 
 PLATFORM=("rocm")
 FRAMEWORK=("pytorch")
-MODEL=("bert-large-uncased" "bert-base-uncased")
-SEQ_LEN="10-20-30"
-BATCH_SIZE="1-2"
-N=10
+#MODEL=("bert-large-uncased" "bert-base-uncased")
+MODEL=`cat model_list.txt`
+SEQ_LEN="10"
+BATCH_SIZE="1"
+N=1
 
 PROF=
 OUT_DIR=${1:-out}

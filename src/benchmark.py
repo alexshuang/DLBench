@@ -48,13 +48,13 @@ def benchmark_pytorch(model:str, batch_size:list, seq_len:list, num_iter:int=1, 
         print("cuda is not available for torch")
         return
 
-    m = ModelMLM(model, fp16)
+    m = ModelLM(model, fp16)
 
     bs_seq = [(bs, sl) for bs in batch_size for sl in seq_len]
     bar = tqdm.tqdm(bs_seq)
     for (bs, sl) in bar:
         bar.set_description(f"{model}")
-        data = DatasetMLM(bs, sl, m.config.vocab_size)
+        data = DatasetLM(bs, sl, m.config.vocab_size)
         run_model(lambda: m.train(**data.get()), bs, sl, num_iter, 'pytorch')
 
 
