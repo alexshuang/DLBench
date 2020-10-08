@@ -8,6 +8,8 @@ import sys
 import time
 import tqdm
 import torch
+import gc
+import numpy as np
 import contexttimer
 from models import *
 from dataset import *
@@ -43,19 +45,62 @@ def run_model(model, batch_size, seq_len, num_iter, framework_name):
     '''
 
 
-def benchmark_pytorch(model:str, batch_size:list, seq_len:list, num_iter:int=1, fp16:bool=False):
+def weight_detach(model):
+    for p in model.parameters():
+        p.data.detach_()
+
+
+def nn_size_parse(batch_size:str, seq_len:str):
+    if batch_size == "large":
+        batch_size = [int(o) for o in np.linspace(1, 64, 18)]
+    elif batch_size == "medium":
+        batch_size = [int(o) for o in np.linspace(1, 32, 12)]
+    elif batch_size == "small":
+        batch_size = [int(o) for o in np.linspace(1, 16, 6)]
+    elif batch_size == "tiny":
+        batch_size = [int(o) for o in np.linspace(1, 16, 3)]
+    else:
+        batch_size = [eval(o) for o in batch_size.split('-')]
+
+    if seq_len == "large":
+        seq_len = [int(o) for o in np.linspace(10, 500, 30)]
+    elif seq_len == "medium":
+        seq_len = [int(o) for o in np.linspace(20, 500, 20)]
+    elif seq_len == "small":
+        seq_len = [int(o) for o in np.linspace(32, 500, 10)]
+    elif seq_len == "tiny":
+        seq_len = [int(o) for o in np.linspace(32, 500, 5)]
+    else:
+        seq_len = [eval(o) for o in seq_len.split('-')]
+    
+    bs_seq = [(bs, sl) for bs in batch_size for sl in seq_len]
+    bs_seq = sorted(bs_seq, key=lambda x: x[0] * x[1])
+    return bs_seq
+
+
+def benchmark_pytorch(model:str, batch_size:str, seq_len:str, num_iter:int=1, fp16:bool=False):
     if not torch.cuda.is_available():
         print("cuda is not available for torch")
         return
 
-    m = ModelLM(model, fp16)
+    try:
+        m = ModelLM(model, fp16)
+    except Exception as e:
+        print("{}: {}".format(model, str(e)))
+        return
 
-    bs_seq = [(bs, sl) for bs in batch_size for sl in seq_len]
+    bs_seq = nn_size_parse(batch_size, seq_len)
     bar = tqdm.tqdm(bs_seq)
     for (bs, sl) in bar:
         bar.set_description(f"{model}")
         data = DatasetLM(bs, sl, m.config.vocab_size)
-        run_model(lambda: m.train(**data.get()), bs, sl, num_iter, 'pytorch')
+        try:
+            run_model(lambda: m.train(**data.get()), bs, sl, num_iter, 'pytorch')
+        except Exception as e:
+            print("{}-bs_{}-seq_len_{}: {}".format(model, bs, sl, str(e)))
+            return
+        weight_detach(m.model)
+        del data
 
 
 if __name__ == '__main__':
@@ -71,11 +116,9 @@ if __name__ == '__main__':
     parser.add_argument("--bf16", action="store_true", help='enable bf16')
     args = parser.parse_args()
 
-    batch_size = [eval(o) for o in args.batch_size.split('-')]
-    seq_len = [eval(o) for o in args.seq_len.split('-')]
     fp16 = True if args.fp16 else False
     
     if args.framework == 'pytorch':
-        benchmark_pytorch(args.model, batch_size, seq_len, args.num_iter, fp16)
+        benchmark_pytorch(args.model, args.batch_size, args.seq_len, args.num_iter, fp16)
     else:
         raise RuntimeError(f"Not supportted framework {args.framework}")
